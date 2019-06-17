@@ -226,13 +226,10 @@ func_declarator2
 
 func_decl 
 	: type
-	IDENTIFIER[name] {
-	} 
-	func_declarator[para] {
-		
-	}
+	IDENTIFIER[name] 
+	func_declarator[para] 
 	func_declarator2[body] { 
-		gen_func($body,$2);
+		gen_func($body,$2,$3);
 		// triversal($body);
 	}
 
@@ -272,6 +269,21 @@ declarator
 
 		$$->args[0] = id;
 	}
+	| IDENTIFIER '[' expr ']' { 
+		$$ = (node*)malloc(sizeof(node));
+		strcpy($$->val,"decl");
+		$$->next = 0;
+		$$->argc = 2;
+		$$->type = ARRAY_NODE;
+		
+		node* id = (node*)malloc(sizeof(node));
+		id->next = 0;
+		id->type = ID_NODE;
+		strcpy(id->val,$1);
+
+		$$->args[0] = id;
+		$$->args[1] = $3;
+	}
 
 decl  
 	: type declarator ';' {
@@ -279,8 +291,14 @@ decl
 	}
 
 arguments
-	: expr
-	| arguments ',' expr
+	: expr {
+		$$ = $1;
+	}
+	| arguments ',' expr {
+		node* n = $1;
+		while(n->next!=0)n=n->next;
+		n->next = $3;
+	}
 
 expr : 
 	CONSTANT {
@@ -299,8 +317,33 @@ expr :
 	}
 	| IDENTIFIER '(' arguments ')' {
 		// puts arguments here
+		$$ = (node*)malloc(sizeof(node));
+		$$->next = 0;
+		strcpy($$->val,$1);
+		$$->argc = 1;
+		$$->args[0] = $3;
+		$$->type = FUNC_CALL;
 	}
 	| IDENTIFIER '('')' {
+		$$ = (node*)malloc(sizeof(node));
+		$$->next = 0;
+		strcpy($$->val,$1);
+		$$->argc = 0;
+		$$->type = FUNC_CALL;
+	}
+	| IDENTIFIER '[' expr ']' {
+		node* n = (node*)malloc(sizeof(node));
+		n->next = 0;
+		strcpy(n->val,$1);
+		n->argc = 0;
+		n->type = CONST_NODE;
+
+		$$ = (node*)malloc(sizeof(node));
+		$$->next = 0;
+		$$->argc = 2;
+		$$->args[0] = n;
+		$$->args[1] = $3;
+		$$->type = ARRAY_NODE;
 	}
 	| expr OR_OP expr {
 		$$ = (node*)malloc(sizeof(node));

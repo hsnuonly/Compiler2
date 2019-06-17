@@ -1,5 +1,6 @@
 #include "util.h"
 #include "stdio.h"
+#define installSymbol(a) _installSymbol(a,4)
 
 typedef struct _Symbol
 {
@@ -18,10 +19,13 @@ int stack[4096];
 int pos = 0;
 int label_idx = 0;
 
-void installSymbol(char *s){
+int scope = 0;
+
+void _installSymbol(char *s, int size){
     strcpy(table[symbol_idx].name, s);
-    table[symbol_idx].size = 4;
+    table[symbol_idx].size = size;
     table[symbol_idx].offset = offset;
+    table[symbol_idx].scope = scope;
     offset -= table[symbol_idx].size;
 
     symbol_idx++;
@@ -38,6 +42,14 @@ Symbol* lookupSymbol(char *s){
     return -1;
 }
 
+void popScope(){
+    while(table[symbol_idx-1].scope>=scope){
+        offset+=table[symbol_idx-1].size;
+        symbol_idx--;
+    }
+    scope--;
+}
+
 int triversal(node* root){
     if(root==0)return 0;
     puts(root->val);
@@ -50,7 +62,12 @@ int triversal(node* root){
 int get_local_size(node* root){
     if(root==0)return 0;
     int size = 0;
-    if(strcmp("decl",root->val)==0)size++;
+    if(strcmp("decl",root->val)==0){
+        if(root->type!=ARRAY_NODE)size+=4;
+        else{
+            size += atoi(root->args[1]->val)*4;
+        }
+    }
     for(int i=0;i<root->argc;i++)
         size+=get_local_size(root->args[i]);
     size+=get_local_size(root->next);
@@ -264,26 +281,52 @@ void gen_code(node* root){
         _gen_code("sw","a0","s0",tmp);
     }
     else if(strcmp(root->val,"decl")==0){
-        installSymbol(root->args[0]->val);
-        if(root->argc>1){
-            gen_code(root->args[1]);
-            Symbol *s = lookupSymbol(root->args[0]->val);
-            char tmp[32];
-            sprintf(tmp,"%d",s->offset);
-            _gen_code("lw","a0","sp","4");
-            _gen_code("sw","a0","s0",tmp);
-            _gen_code("addi","sp","sp","4");
+        if(root->type==ARRAY_NODE){
+            if(root->args[1]->type!=CONST_NODE){
+                sprintf(stderr,"Expect constant array size\n");
+                exit(1);
+            }
+            int size = atoi(root->args[1]->val)*4;
+            _installSymbol(root->args[0]->val,size);
+        }
+        else {
+            installSymbol(root->args[0]->val);
+            if(root->argc>1){
+                gen_code(root->args[1]);
+                Symbol *s = lookupSymbol(root->args[0]->val);
+                char tmp[32];
+                sprintf(tmp,"%d",s->offset);
+                _gen_code("lw","a0","sp","4");
+                _gen_code("sw","a0","s0",tmp);
+                _gen_code("addi","sp","sp","4");
+            }
         }
     }
     else if(strcmp(root->val,"=")==0){
         gen_code(root->args[1]);
-        Symbol *s = lookupSymbol(root->args[0]->val);
-        _gen_code("lw","a0","sp","4");
-        char tmp[32];
-        sprintf(tmp,"%d",s->offset);
-        _gen_code("sw","a0","s0",tmp);
+        if(root->args[0]->type==ARRAY_NODE){
+            gen_code(root->args[0]->args[1]);
+            Symbol *s = lookupSymbol(root->args[0]->args[0]->val);
+            char tmp[32];
+            sprintf(tmp,"%d",s->offset);
+            _gen_code("lw","a0","sp","4");
+            _gen_code("addi","a1","x0","-4");
+            _gen_code("mul","a0","a0","a1");
+            _gen_code("add","a0","a0","s0");
+            _gen_code("lw","a1","sp","8");
+            _gen_code("sw","a1","a0",tmp);
+            _gen_code("addi","sp","sp","8");
+        }
+        else{
+            Symbol *s = lookupSymbol(root->args[0]->val);
+            _gen_code("lw","a0","sp","4");
+            char tmp[32];
+            sprintf(tmp,"%d",s->offset);
+            _gen_code("sw","a0","s0",tmp);
+        }
     }
     else if(strcmp(root->val,"if_else")==0){
+        scope++;
         int if_end = label_idx++;
         char tmp[32];
         sprintf(tmp,"L%d",if_end);
@@ -306,8 +349,10 @@ void gen_code(node* root){
             sprintf(tmp,"L%d:",else_end);
             _gen_code(tmp,0,0,0);
         }
+        popScope();
     }
     else if(strcmp(root->val,"while")==0){
+        scope++;
         int loop_begin = label_idx++;
         int loop_end = label_idx++;
         char tmp[32];
@@ -329,19 +374,42 @@ void gen_code(node* root){
         _gen_code("j",tmp,0,0);
         sprintf(tmp,"L%d:",loop_end);
         _gen_code(tmp,0,0,0);
+        popScope();
+    }
+    else if(root->type==FUNC_CALL){
+        if(root->argc>0){
+            _gen_code("sw", "a0", "sp", "0");
 
+            node* n = root->args[0];
+            int para_size = 0;
+            while(n!=0){
+                gen_code(n);
+                n=n->next;
+                para_size++;
+            }
+
+            char tmp[32];
+            sprintf(tmp,"%d",para_size);
+            _gen_code("addi","sp","sp",tmp);
+        }
     }
     if(root->next!=0)
         gen_code(root->next);
 }
 
 
-void gen_func(node* root,char *func_name){
+void gen_func(node* root,char *func_name,func_arg* argv){
     printf("\t.globl\t%s\n",func_name);
     printf("\t.type\t%s, @function\n",func_name);
     printf("%s:\n",func_name);
 
-    int local_size = get_local_size(root)*4;
+    symbol_idx = 0;
+
+    int local_size = get_local_size(root);
+    offset += (argv->argc)*4;
+    for(int i=0;i<argv->argc;i++){
+        installSymbol(argv->args[i]);
+    }
     _gen_code("sd","s0","sp","0");
     _gen_code("addi","sp","sp","8");
     char tmp[32];
