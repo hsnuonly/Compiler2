@@ -83,17 +83,18 @@ if_part
 		$$->argc = 2;
 		$$->args[0] = $3;
 		$$->args[1] = $5;
-		$$->isConst = 0 ;
+		$$->type = BLOCK;
 	}
 
 else_part
 	: ELSE stmt {
-		$$ = (node*)malloc(sizeof(node));
-		$$->next = 0;
-		strcpy($$->val, $1);
-		$$->argc = 1;
-		$$->args[0] = $2;
-		$$->isConst = 0 ;
+		// $$ = (node*)malloc(sizeof(node));
+		// $$->next = 0;
+		// strcpy($$->val, $1);
+		// $$->argc = 1;
+		// $$->args[0] = $2;
+		// $$->type = BLOCK;
+		$$ = $2;
 	}
 	| %prec IFX %empty { $$=0; }
 	;
@@ -102,7 +103,7 @@ condition_stmt
 	: if_part else_part {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		$$->isConst = 0 ;
+		$$->type = BLOCK;
 		strcpy($$->val, "if_else");
 		$$->argc = 1;
 		$$->args[0] = $1;
@@ -117,7 +118,7 @@ iter_stmt
 	| WHILE '(' expr ')' stmt {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		$$->isConst = 0 ;
+		$$->type = BLOCK;
 		strcpy($$->val, "while");
 		$$->argc = 2;
 		$$->args[0] = $3;
@@ -129,13 +130,13 @@ jump_stmt
 		$$ = (node*)malloc(sizeof(node));
 		strcpy($$->val, $1);
 		$$->next = 0;
-		$$->isConst = 0 ;
+		$$->type = BLOCK;
 	}
 	| RETURN expr ';' {
 		$$ = (node*)malloc(sizeof(node));
 		strcpy($$->val, $1);
 		$$->next = 0;
-		$$->isConst = 0 ;
+		$$->type = BLOCK;
 		$$->argc = 1;
 		$$->args[0] = $2;
 	}
@@ -143,14 +144,14 @@ jump_stmt
 		$$ = (node*)malloc(sizeof(node));
 		strcpy($$->val, $1);
 		$$->next = 0;
-		$$->isConst = 0 ;
+		$$->type = BLOCK;
 		$$->argc = 1;
 	}
 	| BREAK ';' {
 		$$ = (node*)malloc(sizeof(node));
 		strcpy($$->val, $1);
 		$$->next = 0;
-		$$->isConst = 0 ;
+		$$->type = BLOCK;
 		$$->argc = 1;
 	}
 
@@ -231,7 +232,8 @@ func_decl
 		
 	}
 	func_declarator2[body] { 
-		gen_code($body);
+		gen_func($body,$2);
+		// triversal($body);
 	}
 
 declarator
@@ -246,11 +248,11 @@ declarator
 		$$->next = 0;
 		strcpy($$->val,"decl");
 		$$->argc = 2;
-		$$->isConst = 0;
+		$$->type = BLOCK;
 
 		node* id = (node*)malloc(sizeof(node));
 		id->next = 0;
-		id->isConst = 0;
+		id->type = 0;
 		strcpy(id->val,$1);
 
 		$$->args[0] = id;
@@ -261,11 +263,11 @@ declarator
 		strcpy($$->val,"decl");
 		$$->next = 0;
 		$$->argc = 1;
-		$$->isConst = 0;
+		$$->type = BLOCK;
 		
 		node* id = (node*)malloc(sizeof(node));
 		id->next = 0;
-		id->isConst = 0;
+		id->type = 0;
 		strcpy(id->val,$1);
 
 		$$->args[0] = id;
@@ -286,14 +288,14 @@ expr :
 		$$->next = 0;
 		strcpy($$->val,$1);
 		$$->argc = 0;
-		$$->isConst = 1 ;
+		$$->type = CONST_NODE;
 	}
 	| IDENTIFIER {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
 		strcpy($$->val,$1);
 		$$->argc = 0;
-		$$->isConst = 0 ;
+		$$->type = EXPR;
 	}
 	| IDENTIFIER '(' arguments ')' {
 		// puts arguments here
@@ -303,241 +305,241 @@ expr :
 	| expr OR_OP expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) || atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr AND_OP expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) && atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr '|' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) | atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr '^' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) ^ atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr '&' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) & atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr EQ_OP expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) == atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr NE_OP expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) != atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr '<' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) < atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr LE_OP expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) <= atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr GE_OP expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) >= atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr '>' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) > atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr LEFT_OP expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) << atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr RIGHT_OP expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) >> atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr '+' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) + atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr '-' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) - atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr '=' expr {
@@ -547,54 +549,54 @@ expr :
 		$$->argc = 2;
 		$$->args[0] = $1;
 		$$->args[1] = $3;
-		$$->isConst = 0;
+		$$->type = BLOCK;
 	}
 	| expr '*' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) * atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr '/' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) / atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr '%' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($1->isConst && $3->isConst){
+		if($1->type==CONST_NODE && $3->type==CONST_NODE){
 			$$->argc = 0;
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			sprintf($$->val, "%d", atoi($1->val) % atoi($3->val) );
 		}
 		else{
 			strcpy($$->val,$2);
 			$$->argc = 2;
 			$$->args[0] = $1;
-			$$->args[0] = $3;
-			$$->isConst = $1->isConst && $3->isConst;
+			$$->args[1] = $3;
+			$$->type = EXPR;
 		}
 	}
 	| expr INC_OP {
@@ -603,7 +605,7 @@ expr :
 		strcpy($$->val,$2);
 		$$->argc = 1;
 		$$->args[0] = $1;
-		$$->isConst = $1->isConst;
+		$$->type = $1->type;
 	}
 	| expr DEC_OP {
 		$$ = (node*)malloc(sizeof(node));
@@ -611,7 +613,7 @@ expr :
 		strcpy($$->val,$2);
 		$$->argc = 1;
 		$$->args[0] = $1;
-		$$->isConst = $1->isConst;
+		$$->type = $1->type;
 	}
 	| INC_OP expr {
 		$$ = (node*)malloc(sizeof(node));
@@ -619,7 +621,7 @@ expr :
 		strcpy($$->val,$1);
 		$$->argc = 1;
 		$$->args[0] = $2;
-		$$->isConst = $2->isConst;
+		$$->type = $2->type;
 	}
 	| DEC_OP expr {
 		$$ = (node*)malloc(sizeof(node));
@@ -627,21 +629,21 @@ expr :
 		strcpy($$->val,$1);
 		$$->argc = 1;
 		$$->args[0] = $2;
-		$$->isConst = $2->isConst;
+		$$->type = $2->type;
 	}
 	| '-' expr %prec MINUS_SIGN {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($2->isConst){
+		if($2->type){
 			sprintf($$->val, "%d", -atoi($2->val));
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			$$->argc = 0;
 		}
 		else{
 			strcpy($$->val,$1);
 			$$->argc = 1;
 			$$->args[0] = $2;
-			$$->isConst = $2->isConst;
+			$$->type = $2->type;
 		}
 	}
 	| '+' expr {
@@ -650,16 +652,16 @@ expr :
 	| '!' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($2->isConst){
+		if($2->type){
 			sprintf($$->val, "%d", !atoi($2->val));
-			$$->isConst = 1;
+			$$->type = CONST_NODE;
 			$$->argc = 0;
 		}
 		else{
 			strcpy($$->val,$1);
 			$$->argc = 1;
 			$$->args[0] = $2;
-			$$->isConst = $2->isConst;
+			$$->type = $2->type;
 		}
 	}
 	| '(' expr ')' {
