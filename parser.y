@@ -704,7 +704,7 @@ expr :
 			strcpy($$->val,$1);
 			$$->argc = 1;
 			$$->args[0] = $2;
-			$$->type = $2->type;
+			$$->type = EXPR;
 		}
 	}
 	| '(' expr ')' {

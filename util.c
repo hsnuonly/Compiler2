@@ -20,6 +20,7 @@ int pos = 0;
 int label_idx = 0;
 
 int scope = 0;
+char cur_func[64];
 
 void _installSymbol(char *s, int size){
     strcpy(table[symbol_idx].name, s);
@@ -43,7 +44,7 @@ Symbol* lookupSymbol(char *s){
 }
 
 void popScope(){
-    while(table[symbol_idx-1].scope>=scope){
+    while(symbol_idx>0 && table[symbol_idx-1].scope>=scope){
         offset+=table[symbol_idx-1].size;
         symbol_idx--;
     }
@@ -164,15 +165,6 @@ void gen_code(node* root){
         _gen_code("lw","a0","sp","8");
         _gen_code("lw","a1","sp","4");
         _gen_code("rem","a0","a0","a1");
-        _gen_code("addi","sp","sp","4");
-        _gen_code("sw","a0","sp","4");
-    }
-    else if(strcmp(root->val,"-")==0 && root->argc==2){
-        gen_code(root->args[0]);
-        gen_code(root->args[1]);
-        _gen_code("lw","a0","sp","8");
-        _gen_code("lw","a1","sp","4");
-        _gen_code("sub","a0","a0","a1");
         _gen_code("addi","sp","sp","4");
         _gen_code("sw","a0","sp","4");
     }
@@ -353,8 +345,8 @@ void gen_code(node* root){
     }
     else if(strcmp(root->val,"while")==0){
         scope++;
-        int loop_begin = label_idx++;
-        int loop_end = label_idx++;
+        int loop_begin = stack[pos++] = label_idx++;
+        int loop_end = stack[pos++] = label_idx++;
         char tmp[32];
         sprintf(tmp,"L%d:",loop_begin);
         _gen_code(tmp,0,0,0);
@@ -375,10 +367,12 @@ void gen_code(node* root){
         sprintf(tmp,"L%d:",loop_end);
         _gen_code(tmp,0,0,0);
         popScope();
+        pos-=2;
     }
     else if(root->type==FUNC_CALL){
         if(root->argc>0){
-            _gen_code("sw", "a0", "sp", "0");
+            _gen_code("sw", "ra", "sp", "0");
+            _gen_code("addi", "sp", "sp", "-4");
 
             node* n = root->args[0];
             int para_size = 0;
@@ -387,11 +381,31 @@ void gen_code(node* root){
                 n=n->next;
                 para_size++;
             }
+            _gen_code("jal","ra",root->val,0);
 
             char tmp[32];
-            sprintf(tmp,"%d",para_size);
+            sprintf(tmp,"%d",para_size*4);
             _gen_code("addi","sp","sp",tmp);
+
+            _gen_code("addi", "sp", "sp", "4");
+            _gen_code("lw", "ra", "sp", "0");
         }
+    }
+    else if(strcmp(root->val,"return")==0){
+        if(root->argc>0){
+            gen_code(root->args[0]);
+        }
+        _gen_code("j",cur_func,0,0);
+    }
+    else if(strcmp(root->val,"break")==0){
+        char tmp[32];
+        sprintf(tmp,"L%d",stack[pos-1]);
+        _gen_code("j",tmp,0,0);
+    }
+    else if(strcmp(root->val,"continue")==0){
+        char tmp[32];
+        sprintf(tmp,"L%d",stack[pos-2]);
+        _gen_code("j",tmp,0,0);
     }
     if(root->next!=0)
         gen_code(root->next);
@@ -404,6 +418,9 @@ void gen_func(node* root,char *func_name,func_arg* argv){
     printf("%s:\n",func_name);
 
     symbol_idx = 0;
+    sprintf(cur_func,"%s_END",func_name);
+
+    scope++;
 
     int local_size = get_local_size(root);
     offset += (argv->argc)*4;
@@ -411,18 +428,22 @@ void gen_func(node* root,char *func_name,func_arg* argv){
         installSymbol(argv->args[i]);
     }
     _gen_code("sd","s0","sp","0");
-    _gen_code("addi","sp","sp","8");
+    _gen_code("addi","sp","sp","-8");
     char tmp[32];
-    sprintf(tmp,"%d",local_size);
+    sprintf(tmp,"%d",-local_size);
     _gen_code("addi","s0","sp","0");
     _gen_code("addi","sp","sp",tmp);
 
     gen_code(root);
+
+    sprintf(tmp,"%s:",cur_func);
+    _gen_code(tmp,0,0,0);
     
-    sprintf(tmp,"%d",-local_size);
+    sprintf(tmp,"%d",local_size);
     _gen_code("addi","sp","sp",tmp);
-    _gen_code("addi","sp","sp","-8");
+    _gen_code("addi","sp","sp","8");
     _gen_code("ld","s0","sp","0");
 
     _gen_code("jr","ra",0,0);
+    popScope();
 }
