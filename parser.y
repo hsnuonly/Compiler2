@@ -130,13 +130,13 @@ jump_stmt
 		$$ = (node*)malloc(sizeof(node));
 		strcpy($$->val, $1);
 		$$->next = 0;
-		$$->type = BLOCK;
+		$$->type = EXPR;
 	}
 	| RETURN expr ';' {
 		$$ = (node*)malloc(sizeof(node));
 		strcpy($$->val, $1);
 		$$->next = 0;
-		$$->type = BLOCK;
+		$$->type = EXPR;
 		$$->argc = 1;
 		$$->args[0] = $2;
 	}
@@ -144,14 +144,14 @@ jump_stmt
 		$$ = (node*)malloc(sizeof(node));
 		strcpy($$->val, $1);
 		$$->next = 0;
-		$$->type = BLOCK;
+		$$->type = EXPR;
 		$$->argc = 1;
 	}
 	| BREAK ';' {
 		$$ = (node*)malloc(sizeof(node));
 		strcpy($$->val, $1);
 		$$->next = 0;
-		$$->type = BLOCK;
+		$$->type = EXPR;
 		$$->argc = 1;
 	}
 
@@ -248,11 +248,11 @@ declarator
 		$$->next = 0;
 		strcpy($$->val,"decl");
 		$$->argc = 2;
-		$$->type = BLOCK;
+		$$->type = EXPR;
 
 		node* id = (node*)malloc(sizeof(node));
 		id->next = 0;
-		id->type = 0;
+		id->type = ID_NODE;
 		strcpy(id->val,$1);
 
 		$$->args[0] = id;
@@ -263,11 +263,11 @@ declarator
 		strcpy($$->val,"decl");
 		$$->next = 0;
 		$$->argc = 1;
-		$$->type = BLOCK;
+		$$->type = EXPR;
 		
 		node* id = (node*)malloc(sizeof(node));
 		id->next = 0;
-		id->type = 0;
+		id->type = ID_NODE;
 		strcpy(id->val,$1);
 
 		$$->args[0] = id;
@@ -295,7 +295,7 @@ expr :
 		$$->next = 0;
 		strcpy($$->val,$1);
 		$$->argc = 0;
-		$$->type = EXPR;
+		$$->type = ID_NODE;
 	}
 	| IDENTIFIER '(' arguments ')' {
 		// puts arguments here
@@ -605,7 +605,7 @@ expr :
 		strcpy($$->val,$2);
 		$$->argc = 1;
 		$$->args[0] = $1;
-		$$->type = $1->type;
+		$$->type = EXPR;
 	}
 	| expr DEC_OP {
 		$$ = (node*)malloc(sizeof(node));
@@ -613,7 +613,7 @@ expr :
 		strcpy($$->val,$2);
 		$$->argc = 1;
 		$$->args[0] = $1;
-		$$->type = $1->type;
+		$$->type = EXPR;
 	}
 	| INC_OP expr {
 		$$ = (node*)malloc(sizeof(node));
@@ -621,7 +621,7 @@ expr :
 		strcpy($$->val,$1);
 		$$->argc = 1;
 		$$->args[0] = $2;
-		$$->type = $2->type;
+		$$->type = EXPR;
 	}
 	| DEC_OP expr {
 		$$ = (node*)malloc(sizeof(node));
@@ -629,12 +629,12 @@ expr :
 		strcpy($$->val,$1);
 		$$->argc = 1;
 		$$->args[0] = $2;
-		$$->type = $2->type;
+		$$->type = EXPR;
 	}
 	| '-' expr %prec MINUS_SIGN {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($2->type){
+		if($2->type == CONST_NODE){
 			sprintf($$->val, "%d", -atoi($2->val));
 			$$->type = CONST_NODE;
 			$$->argc = 0;
@@ -643,7 +643,7 @@ expr :
 			strcpy($$->val,$1);
 			$$->argc = 1;
 			$$->args[0] = $2;
-			$$->type = $2->type;
+			$$->type = EXPR;
 		}
 	}
 	| '+' expr {
@@ -652,7 +652,7 @@ expr :
 	| '!' expr {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
-		if($2->type){
+		if($2->type == CONST_NODE){
 			sprintf($$->val, "%d", !atoi($2->val));
 			$$->type = CONST_NODE;
 			$$->argc = 0;

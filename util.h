@@ -1,6 +1,7 @@
 #define EXPR        0
 #define BLOCK       1
 #define CONST_NODE  2
+#define ID_NODE     3
 
 typedef struct _node {
     char val[32];

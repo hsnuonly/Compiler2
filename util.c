@@ -64,7 +64,7 @@ void _gen_code(char* op,char* arg0,char* arg1,char* arg2){
     printf("%s\t",op);
     if(arg0) printf("%s", arg0);
 
-    if(strcmp("lw",op)==0||strcmp("sw",op)==0){
+    if(strcmp("lw",op)==0||strcmp("sw",op)==0||strcmp("ld",op)==0||strcmp("sd",op)==0){
         printf(", %s(%s)",arg2,arg1);
     }
     else{
@@ -78,11 +78,25 @@ void gen_code(node* root){
     if(root==0)return;
 
     if(root->type==CONST_NODE){ //CONST
-        _gen_code("addi", "a0", "x0", root->val);
+        int val = atoi(root->val);
+        int uval = val>>12;
+        if(uval>0 || val>2047){
+            if(val>2047){
+                uval++;
+                val -= 4096;
+            }
+            else val-=uval<<12;
+            char tmp[32];
+            sprintf(tmp,"%d",uval);
+            _gen_code("lui","a0",tmp,0);
+            sprintf(tmp,"%d",val);
+            _gen_code("addi","a0","a0",tmp);
+        }
+        else _gen_code("addi", "a0", "x0", root->val);
         _gen_code("sw", "a0", "sp", "0");
         _gen_code("addi", "sp", "sp", "-4");
     }
-    else if(root->type==EXPR&&root->argc==0){ //id
+    else if(root->type==ID_NODE){ //id
         Symbol *s = lookupSymbol(root->val);
         char tmp[32];
         sprintf(tmp,"%d",s->offset);
@@ -100,7 +114,7 @@ void gen_code(node* root){
         _gen_code("addi","sp","sp","4");
         _gen_code("sw","a0","sp","4");
     }
-    else if(strcmp(root->val,"-")==0){
+    else if(strcmp(root->val,"-")==0&&root->argc==2){
         gen_code(root->args[0]);
         gen_code(root->args[1]);
         _gen_code("lw","a0","sp","8");
@@ -136,7 +150,7 @@ void gen_code(node* root){
         _gen_code("addi","sp","sp","4");
         _gen_code("sw","a0","sp","4");
     }
-    else if(strcmp(root->val,"-")==0){
+    else if(strcmp(root->val,"-")==0 && root->argc==2){
         gen_code(root->args[0]);
         gen_code(root->args[1]);
         _gen_code("lw","a0","sp","8");
@@ -207,7 +221,7 @@ void gen_code(node* root){
         _gen_code("lw","a0","sp","8");
         _gen_code("lw","a1","sp","4");
         _gen_code("and","a0","a0","a1");
-        _gen_code("sltui","a0","a0","1");
+        _gen_code("sltiu","a0","a0","1");
         _gen_code("addi","sp","sp","4");
         _gen_code("sw","a0","sp","4");
     }
@@ -217,8 +231,20 @@ void gen_code(node* root){
         _gen_code("lw","a0","sp","8");
         _gen_code("lw","a1","sp","4");
         _gen_code("and","a0","a0","a1");
-        _gen_code("slt","a0","x0","a0");
+        _gen_code("sltiu","a0","a0","1");
         _gen_code("addi","sp","sp","4");
+        _gen_code("sw","a0","sp","4");
+    }
+    else if(strcmp(root->val,"-")==0 && root->argc == 1){
+        gen_code(root->args[0]);
+        _gen_code("lw","a0","sp","4");
+        _gen_code("sub","a0","x0","a0");
+        _gen_code("sw","a0","sp","4");
+    }
+    else if(strcmp(root->val,"!")==0){
+        gen_code(root->args[0]);
+        _gen_code("lw","a0","sp","4");
+        _gen_code("sltiu","a0","a0","1");
         _gen_code("sw","a0","sp","4");
     }
     else if(strcmp(root->val,"++")==0){
@@ -266,7 +292,7 @@ void gen_code(node* root){
         gen_code(cond);
         _gen_code("lw","a0","sp","4");
         _gen_code("addi","sp","sp","4");
-        _gen_code("bge","a0","x0",tmp);
+        _gen_code("bge","x0","a0",tmp);
         node* if_stmt = root->args[0]->args[1];
         gen_code(if_stmt);
         sprintf(tmp,"L%d:",if_end);
@@ -294,7 +320,7 @@ void gen_code(node* root){
         _gen_code("lw","a0","sp","4");
         _gen_code("addi","sp","sp","4");
         sprintf(tmp,"L%d",loop_end);
-        _gen_code("bge","a0","x0",tmp);
+        _gen_code("bge","x0","a0",tmp);
 
         node* stmt = root->args[1];
         gen_code(stmt);
@@ -311,11 +337,24 @@ void gen_code(node* root){
 
 
 void gen_func(node* root,char *func_name){
-    printf("\t.globl\t%s\t",func_name);
-    printf("\t.type\t%s\n, @function",func_name);
+    printf("\t.globl\t%s\n",func_name);
+    printf("\t.type\t%s, @function\n",func_name);
     printf("%s:\n",func_name);
 
+    int local_size = get_local_size(root)*4;
+    _gen_code("sd","s0","sp","0");
+    _gen_code("addi","sp","sp","8");
+    char tmp[32];
+    sprintf(tmp,"%d",local_size);
+    _gen_code("addi","s0","sp","0");
+    _gen_code("addi","sp","sp",tmp);
+
     gen_code(root);
+    
+    sprintf(tmp,"%d",-local_size);
+    _gen_code("addi","sp","sp",tmp);
+    _gen_code("addi","sp","sp","-8");
+    _gen_code("ld","s0","sp","0");
 
     _gen_code("jr","ra",0,0);
 }
