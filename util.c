@@ -1,5 +1,7 @@
 #include "util.h"
-#include "stdio.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #define installSymbol(a) _installSymbol(a,4)
 
 typedef struct _Symbol
@@ -22,6 +24,8 @@ int label_idx = 0;
 int scope = 0;
 char cur_func[64];
 
+int go_next = 1;
+
 void _installSymbol(char *s, int size){
     strcpy(table[symbol_idx].name, s);
     table[symbol_idx].size = size;
@@ -40,7 +44,7 @@ Symbol* lookupSymbol(char *s){
         }
         i--;
     }
-    return -1;
+    return 0;
 }
 
 void popScope(){
@@ -177,6 +181,24 @@ void gen_code(node* root){
         _gen_code("addi","sp","sp","4");
         _gen_code("sw","a0","sp","4");
     }
+    else if(strcmp(root->val,"||")==0){
+        gen_code(root->args[0]);
+        gen_code(root->args[1]);
+        _gen_code("lw","a0","sp","8");
+        _gen_code("lw","a1","sp","4");
+        _gen_code("or","a0","a0","a1");
+        _gen_code("addi","sp","sp","4");
+        _gen_code("sw","a0","sp","4");
+    }
+    else if(strcmp(root->val,"&&")==0){
+        gen_code(root->args[0]);
+        gen_code(root->args[1]);
+        _gen_code("lw","a0","sp","8");
+        _gen_code("lw","a1","sp","4");
+        _gen_code("and","a0","a0","a1");
+        _gen_code("addi","sp","sp","4");
+        _gen_code("sw","a0","sp","4");
+    }
     else if(strcmp(root->val,"&")==0){
         gen_code(root->args[0]);
         gen_code(root->args[1]);
@@ -229,7 +251,7 @@ void gen_code(node* root){
         gen_code(root->args[1]);
         _gen_code("lw","a0","sp","8");
         _gen_code("lw","a1","sp","4");
-        _gen_code("and","a0","a0","a1");
+        _gen_code("sub","a0","a0","a1");
         _gen_code("sltiu","a0","a0","1");
         _gen_code("addi","sp","sp","4");
         _gen_code("sw","a0","sp","4");
@@ -239,7 +261,7 @@ void gen_code(node* root){
         gen_code(root->args[1]);
         _gen_code("lw","a0","sp","8");
         _gen_code("lw","a1","sp","4");
-        _gen_code("and","a0","a0","a1");
+        _gen_code("sub","a0","a0","a1");
         _gen_code("sltiu","a0","a0","1");
         _gen_code("addi","sp","sp","4");
         _gen_code("sw","a0","sp","4");
@@ -275,7 +297,7 @@ void gen_code(node* root){
     else if(strcmp(root->val,"decl")==0){
         if(root->type==ARRAY_NODE){
             if(root->args[1]->type!=CONST_NODE){
-                sprintf(stderr,"Expect constant array size\n");
+                printf("Expect constant array size\n");
                 exit(1);
             }
             int size = atoi(root->args[1]->val)*4;
@@ -324,21 +346,29 @@ void gen_code(node* root){
         sprintf(tmp,"L%d",if_end);
 
         node* cond = root->args[0]->args[0];
-        gen_code(cond);
-        _gen_code("lw","a0","sp","4");
-        _gen_code("addi","sp","sp","4");
-        _gen_code("bge","x0","a0",tmp);
+        {
+            gen_code(cond);
+            _gen_code("lw","a0","sp","4");
+            _gen_code("addi","sp","sp","4");
+            _gen_code("bge","x0","a0",tmp);
+        }
         node* if_stmt = root->args[0]->args[1];
         gen_code(if_stmt);
-        sprintf(tmp,"L%d:",if_end);
-        _gen_code(tmp,0,0,0);
         node* else_stmt = root->args[1];
-        if(else_stmt!=0){
+        if(else_stmt) {
             int else_end = label_idx++;
             sprintf(tmp,"L%d",else_end);
             _gen_code("j",tmp,0,0);
+
+            sprintf(tmp,"L%d:",if_end);
+            _gen_code(tmp,0,0,0);
+
             gen_code(else_stmt);
             sprintf(tmp,"L%d:",else_end);
+            _gen_code(tmp,0,0,0);
+        }
+        else{
+            sprintf(tmp,"L%d:",if_end);
             _gen_code(tmp,0,0,0);
         }
         popScope();
@@ -371,9 +401,12 @@ void gen_code(node* root){
     }
     else if(root->type==FUNC_CALL){
         if(root->argc>0){
-            _gen_code("sw", "ra", "sp", "0");
-            _gen_code("addi", "sp", "sp", "-4");
+            char tmp[32];
+            _gen_code("sd", "ra", "sp", "0");
+            _gen_code("addi", "sp", "sp", "-8");
 
+            int _go_next= go_next;
+            go_next = 0;
             node* n = root->args[0];
             int para_size = 0;
             while(n!=0){
@@ -381,19 +414,25 @@ void gen_code(node* root){
                 n=n->next;
                 para_size++;
             }
+            go_next = _go_next;
             _gen_code("jal","ra",root->val,0);
 
-            char tmp[32];
+
             sprintf(tmp,"%d",para_size*4);
             _gen_code("addi","sp","sp",tmp);
 
-            _gen_code("addi", "sp", "sp", "4");
-            _gen_code("lw", "ra", "sp", "0");
+            _gen_code("addi", "sp", "sp", "8");
+            _gen_code("ld", "ra", "sp", "0");
+
+            _gen_code("sw","a0","sp","0");
+            _gen_code("addi","sp","sp","-4");
         }
     }
     else if(strcmp(root->val,"return")==0){
         if(root->argc>0){
             gen_code(root->args[0]);
+            _gen_code("lw","a0","sp","4");
+            _gen_code("addi", "sp", "sp", "4");
         }
         _gen_code("j",cur_func,0,0);
     }
@@ -407,7 +446,7 @@ void gen_code(node* root){
         sprintf(tmp,"L%d",stack[pos-2]);
         _gen_code("j",tmp,0,0);
     }
-    if(root->next!=0)
+    if(root->next!=0&&go_next)
         gen_code(root->next);
 }
 
@@ -427,22 +466,24 @@ void gen_func(node* root,char *func_name,func_arg* argv){
     for(int i=0;i<argv->argc;i++){
         installSymbol(argv->args[i]);
     }
-    _gen_code("sd","s0","sp","0");
-    _gen_code("addi","sp","sp","-8");
     char tmp[32];
     sprintf(tmp,"%d",-local_size);
+    _gen_code("addi","a0","s0","0");
     _gen_code("addi","s0","sp","0");
     _gen_code("addi","sp","sp",tmp);
+    _gen_code("sd","a0","sp","-4");
+    _gen_code("addi","sp","sp","-8");
 
     gen_code(root);
 
     sprintf(tmp,"%s:",cur_func);
     _gen_code(tmp,0,0,0);
     
+    _gen_code("addi","sp","sp","8");
+    _gen_code("ld","s0","sp","-4");
+
     sprintf(tmp,"%d",local_size);
     _gen_code("addi","sp","sp",tmp);
-    _gen_code("addi","sp","sp","8");
-    _gen_code("ld","s0","sp","0");
 
     _gen_code("jr","ra",0,0);
     popScope();

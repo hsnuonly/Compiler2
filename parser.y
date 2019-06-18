@@ -49,7 +49,7 @@
 %type <astnode> arguments
 
 
-%type <astnode> type
+%type <stringval> type
 %start program
 
 %left ','
@@ -114,7 +114,17 @@ condition_stmt
 	}
 
 iter_stmt
-	: FOR '(' expr_stmt expr_stmt expr ')' stmt
+	: FOR '(' expr_stmt[init] expr_stmt[cond] expr[loop_end] ')' stmt[body]{
+		$$ = (node*)malloc(sizeof(node));
+		$$->next = 0;
+		$$->type = BLOCK;
+		strcpy($$->val, "for");
+		$$->argc = 4;
+		$$->args[0] = $init;
+		$$->args[1] = $cond;
+		$$->args[2] = $loop_end;
+		$$->args[3] = $body;
+    }
 	| WHILE '(' expr ')' stmt {
 		$$ = (node*)malloc(sizeof(node));
 		$$->next = 0;
@@ -434,7 +444,7 @@ expr :
 			sprintf($$->val, "%d", atoi($1->val) == atoi($3->val) );
 		}
 		else{
-			strcpy($$->val,$2);
+			strcpy($$->val,"==");
 			$$->argc = 2;
 			$$->args[0] = $1;
 			$$->args[1] = $3;

@@ -1,9 +1,9 @@
+
+int gcd(int a,int b){
+    if(a==0||b==0)return a+b;
+    else return gcd(b%a,a);
+}
+
 int main(){
-	int i=0;
-	while(i<100){
-		i++;
-		int b;
-		if(i%2)b=1;
-		else b=0;
-	}
+    return gcd(24,42);
 }
