@@ -346,7 +346,55 @@ void gen_code(node* root){
         sprintf(tmp,"L%d",if_end);
 
         node* cond = root->args[0]->args[0];
-        {
+        if(strcmp(cond->val,"==")==0){
+            gen_code(cond->args[0]);
+            gen_code(cond->args[1]);
+            _gen_code("lw","a0","sp","4");
+            _gen_code("lw","a1","sp","8");
+            _gen_code("addi","sp","sp","8");
+            _gen_code("bne","a0","a1",tmp);
+        }
+        else if(strcmp(cond->val,"!=")==0){
+            gen_code(cond->args[0]);
+            gen_code(cond->args[1]);
+            _gen_code("lw","a0","sp","4");
+            _gen_code("lw","a1","sp","8");
+            _gen_code("addi","sp","sp","8");
+            _gen_code("beq","a0","a1",tmp);
+        }
+        else if(strcmp(cond->val,">")==0){
+            gen_code(cond->args[0]);
+            gen_code(cond->args[1]);
+            _gen_code("lw","a0","sp","8");
+            _gen_code("lw","a1","sp","4");
+            _gen_code("addi","sp","sp","8");
+            _gen_code("bge","a1","a0",tmp);
+        }
+        else if(strcmp(cond->val,"<")==0){
+            gen_code(cond->args[0]);
+            gen_code(cond->args[1]);
+            _gen_code("lw","a0","sp","8");
+            _gen_code("lw","a1","sp","4");
+            _gen_code("addi","sp","sp","8");
+            _gen_code("bge","a0","a1",tmp);
+        }
+        else if(strcmp(cond->val,">=")==0){
+            gen_code(cond->args[0]);
+            gen_code(cond->args[1]);
+            _gen_code("lw","a0","sp","8");
+            _gen_code("lw","a1","sp","4");
+            _gen_code("addi","sp","sp","8");
+            _gen_code("blt","a0","a1",tmp);
+        }
+        else if(strcmp(cond->val,"<=")==0){
+            gen_code(cond->args[0]);
+            gen_code(cond->args[1]);
+            _gen_code("lw","a0","sp","8");
+            _gen_code("lw","a1","sp","4");
+            _gen_code("addi","sp","sp","8");
+            _gen_code("blt","a1","a0",tmp);
+        }
+        else {
             gen_code(cond);
             _gen_code("lw","a0","sp","4");
             _gen_code("addi","sp","sp","4");
